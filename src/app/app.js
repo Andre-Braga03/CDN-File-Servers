@@ -266,7 +266,7 @@ function viewVideo(video) {
     thumbnailImg.style.display = "none";
   } else {
     thumbnailImg.style.display = "block";
-    thumbnailImg.src = video.thumbnailURL;
+    thumbnailImg.src = `${video.thumbnailURL}?v=${Date.now()}`;
   }
 
   const videoPlayer = document.getElementById("video-player");
@@ -276,6 +276,7 @@ function viewVideo(video) {
     } else {
       videoPlayer.style.display = "block";
       videoPlayer.src = video.videoURL;
+      thumbnailImg.src = video.thumbnailURL;
       videoPlayer.load();
     }
   }
