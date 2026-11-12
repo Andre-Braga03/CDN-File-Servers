@@ -1,11 +1,11 @@
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { getBearerToken, validateJWT } from "../auth";
-import { getVideo, updateVideo } from "../db/videos";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 import { respondWithJSON } from "./json";
 import type { ApiConfig } from "../config";
-import type { BunRequest } from "bun";
+import { S3Client, type BunRequest } from "bun";
+import { getVideo, updateVideo, type Video } from "../db/videos";
 
 // Returns the aspect ratio of a video file
 export async function getVideoAspectRatio(filePath: string) : Promise<string> {
@@ -86,6 +86,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
     await Bun.write(tempPath, file);
     const aspectRatio = await getVideoAspectRatio(tempPath);
     key = `${aspectRatio}/${videoId}.mp4`;
+
     processedPath = await processVideoForFastStart(tempPath);
     const s3File = cfg.s3Client.file(key, {
       bucket: cfg.s3Bucket,
@@ -98,10 +99,11 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
       await unlink(processedPath);
     }
   }
-  video.videoURL = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${key}`;
+  video.videoURL = key;
   await updateVideo(cfg.db, video);
+  const signedVideo = await dbVideoToSignedVideo(cfg, video);
  
-  return respondWithJSON(200, video);
+  return respondWithJSON(200, signedVideo);
 }
 
 export async function processVideoForFastStart(inputFilePath: string) : Promise<string> {
@@ -128,4 +130,20 @@ export async function processVideoForFastStart(inputFilePath: string) : Promise<
   }
 
   return outputFilePath;
+}
+
+export async function generatePresignedURL(cfg: ApiConfig, key: string, expireTime: number) : Promise<string> {	
+ return cfg.s3Client.presign(key,{
+  expiresIn: expireTime,
+  bucket: cfg.s3Bucket,
+ })
+
+}
+
+export async function dbVideoToSignedVideo(cfg: ApiConfig, video: Video) : Promise<Video> {
+if(!video.videoURL){
+  return video;
+}
+video.videoURL = await generatePresignedURL(cfg, video.videoURL, 300);
+return video;
 }

@@ -40,7 +40,12 @@ export function makeJWT(userID: string, secret: string, expiresIn: number) {
 }
 
 export function validateJWT(tokenString: string, tokenSecret: string) {
-  const decoded = jwt.verify(tokenString, tokenSecret) as jwt.JwtPayload;
+  let decoded: jwt.JwtPayload;
+  try {
+    decoded = jwt.verify(tokenString, tokenSecret) as jwt.JwtPayload;
+  } catch {
+    throw new UserNotAuthenticatedError("Invalid token");
+  }
 
   if (decoded.iss !== ACCESS_TOKEN_ISSUER) {
     throw new UserNotAuthenticatedError("Invalid issuer");
@@ -52,7 +57,6 @@ export function validateJWT(tokenString: string, tokenSecret: string) {
   }
   return userID;
 }
-
 export function getBearerToken(headers: Headers) {
   const authHeader = headers.get("Authorization");
   if (!authHeader) {
